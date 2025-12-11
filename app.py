@@ -14,7 +14,7 @@ def logo():
     draw = ImageDraw.Draw(img)
 
     # Load font
-    font = ImageFont.truetype("bold.ttf", 150)
+    font = ImageFont.truetype("Orchidea Couture.ttf", 150)
 
     # Draw
     draw.text((100, 400), text, font=font, fill="white")
