@@ -6,104 +6,84 @@ import random
 
 app = Flask(__name__)
 
-# Pre-load fonts (with fallbacks)
-def get_font(size):
-    font_paths = [
-        "fonts/impact.ttf", "fonts/arialbd.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "impact.ttf", "arial.ttf"
-    ]
-    for path in font_paths:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except:
-                pass
-    return ImageFont.load_default()
+# Super safe font – works everywhere, no file needed
+def get_font(size=100):
+    try:
+        # Try common system fonts first
+        return ImageFont.truetype("DejaVuSans-Bold", size)
+    except:
+        try:
+            return ImageFont.truetype("Arial", size)
+        except:
+            # Final fallback – always works
+            return ImageFont.load_default(size=size)
 
 @app.route('/')
 def home():
-    return "<h1>Imgen Logo Maker</h1><p>Use: /logo?text=YOUR+TEXT</p>"
+    return "<h1>Imgen Logo Generator</h1><p><a href='/logo'>Default Logo</a> | /logo?text=YOUR+TEXT</p>"
 
 @app.route('/logo')
 def logo():
-    text = request.args.get('text', 'AS MASTI WORLD').upper().strip()
-    if len(text) > 30:
-        text = text[:27] + "..."
+    text = request.args.get('text', 'AS MASTI WORLD').upper()
+    if len(text) > 25:
+        text = text[:22] + "..."
 
-    # Base image
+    # Create base image
     img = Image.new('RGB', (1080, 1080), (10, 0, 30))
     draw = ImageDraw.Draw(img)
 
-    # 1. Background lightning pattern (procedural)
-    for _ in range(80):
-        x1 = random.randint(0, 1080)
-        y1 = random.randint(0, 1080)
-        x2 = x1 + random.randint(-200, 200)
-        y2 = y1 + random.randint(-200, 200)
-        draw.line((x1, y1, x2, y2), fill=(100, 0, 200, 180), width=random.randint(2, 6))
-    
-    # Blur for glow effect
-    img = img.filter(ImageFilter.GaussianBlur(3))
+    # Lightning background
+    for _ in range(70):
+        x1, y1 = random.randint(0,1080), random.randint(0,1080)
+        x2, y2 = x1 + random.randint(-250,250), y1 + random.randint(-250,250)
+        draw.line((x1,y1,x2,y2), fill=(140,0,255,180), width=random.randint(3,7))
+    img = img.filter(ImageFilter.GaussianBlur(4))
 
-    # 2. Scattered background text (repeated, semi-transparent)
-    bg_font = get_font(80)
-    for _ in range(12):
-        angle = random.randint(-40, 40)
-        temp = Image.new('RGBA', (1080, 1080), (0,0,0,0))
-        tdraw = ImageDraw.Draw(temp)
-        tw, th = tdraw.textsize(text, font=bg_font)
-        x = random.randint(0, 1080 - tw)
-        y = random.randint(0, 1080 - th)
-        tdraw.text((x, y), text, font=bg_font, fill=(180, 100, 255, 40))
-        temp = temp.rotate(angle, expand=False)
-        img.paste(temp, (0, 0), temp)
+    # Scattered background text
+    for _ in range(10):
+        temp = Image.new('RGBA', img.size, (0,0,0,0))
+        d = ImageDraw.Draw(temp)
+        f = get_font(90)
+        w, h = d.textsize(text, font=f)
+        x = random.randint(-200, 1080-w)
+        y = random.randint(-200, 1080-h)
+        angle = random.randint(-45,45)
+        d.text((0,0), text, font=f, fill=(180,100,255,50))
+        temp = temp.rotate(angle, expand=1)
+        img.paste(temp, (x,y), temp)
 
-    # 3. Main glowing text
-    main_font_size = 180
-    font = get_font(main_font_size)
-    while True:
-        w, h = draw.textsize(text, font=font)
-        if w <= 950 or main_font_size <= 80:
-            break
-        main_font_size -= 10
-        font = get_font(main_font_size)
+    # Main text with glow
+    font_size = 180
+    font = get_font(font_size)
+    while font.getsize(text)[0] > 950 and font_size > 60:
+        font_size -= 10
+        font = get_font(font_size)
 
+    w, h = font.getsize(text)
     x = (1080 - w) // 2
     y = (1080 - h) // 2 - 50
 
-    # Black outline (multiple passes)
-    outline = 12
-    for dx in range(-outline, outline+1):
-        for dy in range(-outline, outline+1):
-            if abs(dx) + abs(dy) < outline*1.5:
-                draw.text((x+dx, y+dy), text, font=font, fill=(0, 0, 0))
+    # Black outline
+    for dx in range(-10,11):
+        for dy in range(-10,11):
+            draw.text((x+dx, y+dy), text, font=font, fill=(0,0,0))
 
-    # Purple glow (soft)
-    glow = Image.new('RGBA', (1080, 1080), (0,0,0,0))
+    # Purple glow
+    glow = Image.new('RGBA', img.size, (0,0,0,0))
     gdraw = ImageDraw.Draw(glow)
-    for i in range(30, 0, -2):
-        gdraw.text((x, y), text, font=get_font(main_font_size + i), fill=(180, 0, 255, 15))
-    glow = glow.filter(ImageFilter.GaussianBlur(15))
-    img.paste(glow, (0,0), glow)
+    for i in range(40,0,-3):
+        gdraw.text((x,y), text, font=get_font(font_size + i), fill=(200,0,255,20))
+    glow = glow.filter(ImageFilter.GaussianBlur(18))
+    img.paste(glow, glow)
 
     # Main white text
-    draw.text((x, y), text, font=font, fill=(255, 255, 255))
+    draw.text((x,y), text, font=font, fill=(255,255,255))
 
-    # Final neon border glow
-    border = Image.new('RGBA', (1080, 1080), (0,0,0,0))
-    bdraw = ImageDraw.Draw(border)
-    for i in range(20):
-        bdraw.text((x, y), text, font=get_font(main_font_size + 20), fill=(200, 0, 255, 20))
-    border = border.filter(ImageFilter.GaussianBlur(20))
-    img.paste(border, (0,0), border)
-
-    # Save
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG", optimize=True)
-    buffer.seek(0)
-    return send_file(buffer, mimetype="image/png")
+    # Save & send
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
